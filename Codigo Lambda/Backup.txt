@@ -1,0 +1,95 @@
+import json
+import logging
+import boto3
+import random
+logger = logging.getLogger()
+
+def main(event, context):
+    
+    s3 = boto3.client("s3")
+    body = json.loads(event['body'])
+    patientData = body.get('PatientData', None)
+    if (patientData is None):
+        logger.error('Patient data was not specified at all.')
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'ERROR': 'Patient data was not specified at all.'
+            })
+        }
+    
+    newPatient = GetPatientAsJson(patientData)
+    hasNoneValue = any(data is None for data in newPatient.values())
+    if (hasNoneValue):
+        logger.error('There is at least one value remaining.')
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'ERROR': 'There is at least one value remaining.'
+            })
+        }
+        
+    try:
+        response = s3.get_object(Bucket="tfg-files-storage", Key="patients.json")
+        patientsList = json.loads(response['Body'].read().decode('utf-8'))
+    except s3.exceptions.NoSuchKey as e:
+        patientsList = []
+    
+        
+    patientsList = GetUpdatedPatientsList(patientsList, newPatient)
+    fileContent = json.dumps(patientsList)
+    s3.put_object(Bucket="tfg-files-storage", Key="patients.json", Body=fileContent)
+    print(patientsList)
+    return {
+        'statusCode': 200,
+        'body': json.dumps({
+            'INFO': f'Patient {newPatient["Name"]} {newPatient["LastName"]} was successfully added to patients history.'
+        })
+    }
+    
+def GetPatientAsJson(patientData):
+    
+    ID = patientData.get('ID', None)
+    Name = patientData.get('Name', None)
+    LastName = patientData.get('LastName', None)
+    Disease = patientData.get('Disease', None)
+    Fever = patientData.get('Fever', None)
+    Cough = patientData.get('Cough', None)
+    Fatigue = patientData.get('Fatigue', None)
+    BreathingDifficulty = patientData.get('BreathingDifficulty', None)
+    Age = patientData.get('Age', None)
+    Gender = patientData.get('Gender', None)
+    BloodPressure = patientData.get('BloodPressure', None)
+    CholesterolLevel = patientData.get('CholesterolLevel', None)
+    Dangerousness = patientData.get('Dangerousness', None)
+    
+    patient = {
+        "ID": ID,
+        "Name": Name,
+        "LastName": LastName,
+        "Disease": Disease,
+        "Fever": Fever,
+        "Cough": Cough,
+        "Fatigue": Fatigue,
+        "BreathingDifficulty": BreathingDifficulty,
+        "Age": Age,
+        "Gender": Gender,
+        "BloodPressure": BloodPressure,
+        "CholesterolLevel": CholesterolLevel,
+        "Dangerousness": Dangerousness
+    }
+    
+    return patient
+    
+def GetUpdatedPatientsList(patientsList, newPatient):
+    index = -1
+    for pos, patient in enumerate(patientsList):
+        if patient["ID"] == newPatient["ID"]:
+            index = pos
+            
+    if (index == -1):
+        patientsList.append(newPatient)
+    else:
+        patientsList[index] = newPatient
+    
+    return patientsList 
